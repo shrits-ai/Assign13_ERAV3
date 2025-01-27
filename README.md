@@ -2,7 +2,7 @@
 # Llama Model Implementation
 
 This repository contains an implementation of a Llama-like transformer model architecture, featuring rotary embeddings, multi-head self-attention, MLP layers, and a causal language model head. This architecture is primarily focused on the efficient and scalable use of positional embeddings and attention mechanisms, as used in models like GPT and other transformers. This was created using AutoModelForCausalLM with checkpoint "HuggingFaceTB/SmolLM2-135M".  Below is the model : 
-'''
+```
 LlamaForCausalLM(
   (model): LlamaModel(
     (embed_tokens): Embedding(49152, 576)
@@ -74,7 +74,7 @@ Total params: 162,826,560
 Trainable params: 162,826,560
 Non-trainable params: 0
 ======================================================================
-'''
+```
 
 ## Model Architecture
 
