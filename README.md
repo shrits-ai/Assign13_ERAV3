@@ -1375,4 +1375,7 @@ input_ids = torch.randint(0, config['vocab_size'], (10, 2))  # (seq_len, batch_s
 logits = causal_lm_model(input_ids)
 print(f"Logits shape: {logits.shape}")
 ```
-
+# Huggingface app space detail: 
+```
+https://huggingface.co/spaces/Shriti09/Smol2TextGenerator
+```
