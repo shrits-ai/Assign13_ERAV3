@@ -3,8 +3,9 @@
 ### Key Points:
 - **Model Overview:** A brief summary of the components in the architecture.
 - **Installation Instructions:** How to set up the project and install dependencies.
-- **Training Logs
+- **Training Logs:** Training logs 
 - **Component Descriptions:** Explanation of each class and its functionality, with code snippets to demonstrate usage.
+- **Hugging Space App Detail:**
 
 # Model Implementation
 
