@@ -2,137 +2,259 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# Define the LlamaAttention mechanism
-class LlamaAttention(nn.Module):
-    def __init__(self, hidden_size, num_attention_heads):
-        super(LlamaAttention, self).__init__()
-        self.hidden_size = hidden_size
-        self.num_attention_heads = num_attention_heads
-        self.attn_size = hidden_size // num_attention_heads
-        
-        # Linear projections for Q, K, V, and output projection
-        self.q_proj = nn.Linear(hidden_size, hidden_size, bias=False)
-        self.k_proj = nn.Linear(hidden_size, self.attn_size, bias=False)
-        self.v_proj = nn.Linear(hidden_size, self.attn_size, bias=False)
-        self.o_proj = nn.Linear(hidden_size, hidden_size, bias=False)
 
-    def forward(self, x):
-        B, T, C = x.size()  # batch size, sequence length, embedding size
-        q = self.q_proj(x)  # (B, T, C)
-        k = self.k_proj(x)  # (B, T, C)
-        v = self.v_proj(x)  # (B, T, C)
-        
-        # Reshape for multi-head attention
-        q = q.view(B, T, self.num_attention_heads, self.attn_size).transpose(1, 2)
-        k = k.view(B, T, self.num_attention_heads, self.attn_size).transpose(1, 2)
-        v = v.view(B, T, self.num_attention_heads, self.attn_size).transpose(1, 2)
-        
-        # Scaled dot-product attention
-        attn_weights = torch.matmul(q, k.transpose(-1, -2)) / (self.attn_size ** 0.5)
-        attn_weights = F.softmax(attn_weights, dim=-1)
-        
-        # Attention output
-        attn_output = torch.matmul(attn_weights, v)  # (B, num_heads, T, attn_size)
-        attn_output = attn_output.transpose(1, 2).contiguous().view(B, T, C)  # (B, T, C)
-        
-        # Output projection
-        output = self.o_proj(attn_output)
-        return output
+# Configuration as provided
+config_model = {
+    "bos_token_id": 0,
+    "eos_token_id": 0,
+    "hidden_act": "silu",
+    "hidden_size": 576,
+    "initializer_range": 0.041666666666666664,
+    "intermediate_size": 1536,
+    "is_llama_config": True,
+    "max_position_embeddings": 2048,
+    "num_attention_heads": 9,
+    "num_hidden_layers": 30,
+    "num_key_value_heads": 3,
+    "pad_token_id": None,
+    "pretraining_tp": 1,
+    "rms_norm_eps": 1.0e-05,
+    "rope_interleaved": False,
+    "rope_scaling": None,
+    "rope_theta": 10000.0,
+    "tie_word_embeddings": True,
+    "use_cache": True,
+    "vocab_size": 49152
+}
 
-# Define the LlamaMLP (feed-forward layers) block
-class LlamaMLP(nn.Module):
-    def __init__(self, hidden_size, intermediate_size):
-        super(LlamaMLP, self).__init__()
-        self.gate_proj = nn.Linear(hidden_size, intermediate_size, bias=False)
-        self.up_proj = nn.Linear(hidden_size, intermediate_size, bias=False)
-        self.down_proj = nn.Linear(intermediate_size, hidden_size, bias=False)
-        self.act_fn = nn.SiLU()  # Activation function
-
-    def forward(self, x):
-        gate = self.gate_proj(x)
-        up = self.up_proj(x)
-        down = self.down_proj(up)
-        output = self.act_fn(gate + down)
-        return output
-
-# Define RMSNorm for normalization
-class LlamaRMSNorm(nn.Module):
-    def __init__(self, hidden_size, eps=1e-5):
-        super(LlamaRMSNorm, self).__init__()
-        self.weight = nn.Parameter(torch.ones(hidden_size))
-        self.eps = eps
-
-    def forward(self, x):
-        norm = torch.sqrt(torch.mean(x**2, dim=-1, keepdim=True) + self.eps)
-        return x / norm * self.weight
-
-# Define the Rotary Embedding class
+# 1. Rotary Embedding
 class LlamaRotaryEmbedding(nn.Module):
-    def __init__(self, max_position_embeddings, hidden_size):
-        super(LlamaRotaryEmbedding, self).__init__()
-        self.max_position_embeddings = max_position_embeddings
-        self.hidden_size = hidden_size
-        
-    def forward(self, x):
-        # Apply rotary embeddings (simple sine/cosine position encodings for simplicity)
-        seq_len = x.size(1)
-        position = torch.arange(seq_len, device=x.device).unsqueeze(0).expand(x.size(0), -1)
-        # Add rotary embeddings logic as needed here
-        return x + position.float()
+    def __init__(self, dim: int, theta: float = 10000.0):
+        super().__init__()
+        self.dim = dim
+        self.theta = theta
 
-# Define the LlamaDecoderLayer
+    def forward(self, x):
+        batch_size, seq_len, _ = x.size()
+        device = x.device
+
+        # Create the position indices
+        position = torch.arange(seq_len, dtype=torch.float32, device=device).unsqueeze(1)  # Shape: (seq_len, 1)
+        freqs = torch.pow(self.theta, -torch.arange(0, self.dim, 2, dtype=torch.float32, device=device) / self.dim)  # Shape: (dim/2,)
+
+        # Reshape freqs for einsum: Shape (dim/2, 1) -> (dim/2, 1) broadcasting with position
+        freqs = freqs.unsqueeze(1)  # Shape: (dim/2, 1)
+
+        # Calculate sinusoidal embeddings
+        sinusoidal_embeddings = torch.einsum('i,j->ij', position.squeeze(), freqs.squeeze())  # Shape: (seq_len, dim/2)
+
+        # Sinusoidal encoding
+        sin = sinusoidal_embeddings.sin().unsqueeze(0)  # Shape: (1, seq_len, dim/2)
+        cos = sinusoidal_embeddings.cos().unsqueeze(0)  # Shape: (1, seq_len, dim/2)
+
+        # Concatenate the sin and cos values to create the final embedding
+        rotary_embeddings = torch.cat([sin, cos], dim=-1).unsqueeze(0)  # Shape: (1, seq_len, dim)
+
+        # Remove the extra leading dimension (1) to match input tensor shape
+        return rotary_embeddings.squeeze(0)  # Shape: (seq_len, dim)
+'''
+# Testing LlamaRotaryEmbedding again with the modified code
+rotary_emb = LlamaRotaryEmbedding(dim=576, theta=10000.0)
+input_tensor = torch.randn(2, 10, 576)  # (batch_size, seq_len, hidden_size)
+rotary_output = rotary_emb(input_tensor)
+print(f"Rotary embedding output shape: {rotary_output.shape}")
+'''
+
+
+# 2. Attention Layer
+class LlamaAttention(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.q_proj = nn.Linear(config['hidden_size'], config['hidden_size'], bias=False)
+        self.k_proj = nn.Linear(config['hidden_size'], config['hidden_size'] // 3, bias=False)
+        self.v_proj = nn.Linear(config['hidden_size'], config['hidden_size'] // 3, bias=False)
+        self.o_proj = nn.Linear(config['hidden_size'] // 3, config['hidden_size'], bias=False)  # Adjust output projection size
+        self.rope_emb = LlamaRotaryEmbedding(config['hidden_size'])
+
+    def forward(self, x):
+        batch_size, seq_len, _ = x.size()  # Get the batch size and sequence length
+        q = self.q_proj(x)  # Shape: (batch_size, seq_len, hidden_size)
+        k = self.k_proj(x)  # Shape: (batch_size, seq_len, hidden_size // 3)
+        v = self.v_proj(x)  # Shape: (batch_size, seq_len, hidden_size // 3)
+
+        # Apply rotary embeddings (positional encoding)
+        q, k = self.rope_emb(q), self.rope_emb(k)
+
+        # Calculate attention weights (scaled dot-product attention)
+        attn_weights = torch.matmul(q, k.transpose(-2, -1))  # Shape: (batch_size, seq_len, seq_len)
+        attn_probs = torch.nn.functional.softmax(attn_weights, dim=-1)  # Shape: (batch_size, seq_len, seq_len)
+
+        # Apply attention to values
+        attn_output = torch.matmul(attn_probs, v)  # Shape: (batch_size, seq_len, hidden_size // 3)
+
+        # Output projection (adjusted to match hidden_size)
+        out = self.o_proj(attn_output)  # Shape: (batch_size, seq_len, hidden_size)
+
+        return out
+'''
+# Testing LlamaAttention again
+attention_layer = LlamaAttention(config)
+input_tensor = torch.randn(2, 10, 576)  # (batch_size, seq_len, hidden_size)
+attention_output = attention_layer(input_tensor)
+print(f"Attention output shape: {attention_output.shape}")
+'''
+
+# 3. MLP Layer
+class LlamaMLP(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.gate_proj = nn.Linear(config['hidden_size'], config['intermediate_size'], bias=False)  # Hidden size to intermediate size
+        self.up_proj = nn.Linear(config['intermediate_size'], config['intermediate_size'], bias=False)  # Intermediate size to intermediate size
+        self.down_proj = nn.Linear(config['intermediate_size'], config['hidden_size'], bias=False)  # Intermediate size to hidden size
+        self.act_fn = torch.nn.SiLU()  # Activation function
+
+    def forward(self, x):
+        batch_size, seq_len, _ = x.size()
+
+        # Flatten input to (batch_size * seq_len, hidden_size) for projection
+        x = x.view(batch_size * seq_len, -1)  # Shape: (batch_size * seq_len, hidden_size)
+
+        # Apply gate projection
+        x = self.gate_proj(x)  # Shape: (batch_size * seq_len, intermediate_size)
+        x = self.act_fn(x)  # Apply activation
+
+        # Apply up projection
+        x = self.up_proj(x)  # Shape: (batch_size * seq_len, intermediate_size)
+
+        # Apply down projection
+        x = self.down_proj(x)  # Shape: (batch_size * seq_len, hidden_size)
+
+        # Reshape back to (batch_size, seq_len, hidden_size)
+        x = x.view(batch_size, seq_len, -1)  # Shape: (batch_size, seq_len, hidden_size)
+
+        return x
+'''
+# Test the MLP again
+mlp_layer = LlamaMLP(config)
+input_tensor = torch.randn(2, 10, 576)  # (batch_size, seq_len, hidden_size)
+mlp_output = mlp_layer(input_tensor)
+print(f"MLP output shape: {mlp_output.shape}")
+'''
+
+
+# 4. Decoder Layer
 class LlamaDecoderLayer(nn.Module):
-    def __init__(self, hidden_size, num_attention_heads, intermediate_size):
-        super(LlamaDecoderLayer, self).__init__()
-        self.attn = LlamaAttention(hidden_size, num_attention_heads)
-        self.mlp = LlamaMLP(hidden_size, intermediate_size)
-        self.input_layernorm = LlamaRMSNorm(hidden_size)
-        self.post_attention_layernorm = LlamaRMSNorm(hidden_size)
+    def __init__(self, config):
+        super().__init__()
+        self.self_attn = LlamaAttention(config)
+        self.mlp = LlamaMLP(config)
+        self.input_layernorm = nn.LayerNorm(config['hidden_size'], eps=config['rms_norm_eps'])
+        self.post_attention_layernorm = nn.LayerNorm(config['hidden_size'], eps=config['rms_norm_eps'])
 
     def forward(self, x):
-        x_norm = self.input_layernorm(x)
-        attn_output = self.attn(x_norm)
+        # Apply input normalization
+        x = self.input_layernorm(x)
+        
+        # Attention
+        attn_output = self.self_attn(x)
         x = x + attn_output  # Residual connection
-        x_norm = self.post_attention_layernorm(x)
-        mlp_output = self.mlp(x_norm)
+        
+        # Apply post-attention layer normalization
+        x = self.post_attention_layernorm(x)
+
+        # Apply MLP
+        mlp_output = self.mlp(x)
         x = x + mlp_output  # Residual connection
         return x
+'''
+# Testing LlamaDecoderLayer
+decoder_layer = LlamaDecoderLayer(config)
+input_tensor = torch.randn(10, 2, 576)  # (seq_len, batch_size, hidden_size)
+decoder_output = decoder_layer(input_tensor)
+print(f"Decoder layer output shape: {decoder_output.shape}")
 
-# Define the LlamaForCausalLM Model
-class LlamaForCausalLM(nn.Module):
-    def __init__(self, vocab_size, hidden_size, num_attention_heads, num_layers, intermediate_size, max_position_embeddings):
-        super(LlamaForCausalLM, self).__init__()
-        self.embed_tokens = nn.Embedding(vocab_size, hidden_size)
-        self.layers = nn.ModuleList([LlamaDecoderLayer(hidden_size, num_attention_heads, intermediate_size) for _ in range(num_layers)])
-        self.norm = LlamaRMSNorm(hidden_size)
-        self.rotary_emb = LlamaRotaryEmbedding(max_position_embeddings, hidden_size)
-        self.lm_head = nn.Linear(hidden_size, vocab_size, bias=False)
+# 5. Model
+class LlamaModel(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.embed_tokens = nn.Embedding(config['vocab_size'], config['hidden_size'])
+
+        # Partially shared decoder layers
+        self.layers = nn.ModuleList([LlamaDecoderLayer(config) for _ in range(config['num_hidden_layers'])])
+
+        # Separate adapters for each layer (adds more parameters)
+        self.adapters = nn.ModuleList([
+            nn.Linear(config['hidden_size'], config['hidden_size'], bias=False)
+            for _ in range(config['num_hidden_layers'])
+        ])
+
+        self.norm = nn.LayerNorm(config['hidden_size'], eps=config['rms_norm_eps'])
 
     def forward(self, input_ids):
-        # Embedding layer
+        # Initial embedding lookup
         x = self.embed_tokens(input_ids)
-        
-        # Pass through layers
+
+        # Pass through transformer layers with unique adapters per layer
+        for i, layer in enumerate(self.layers):
+            x = layer(x)  # Apply the i-th decoder layer
+            x = x + self.adapters[i](x)  # Add per-layer adapter
+
+        # Apply the final layer normalization
+        x = self.norm(x)
+        return x
+
+
+'''
+class LlamaModel(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.embed_tokens = nn.Embedding(config['vocab_size'], config['hidden_size'])
+        self.layers = nn.ModuleList([LlamaDecoderLayer(config) for _ in range(config['num_hidden_layers'])])
+        self.norm = nn.LayerNorm(config['hidden_size'], eps=config['rms_norm_eps'])
+        self.rotary_emb = LlamaRotaryEmbedding(config['hidden_size'])
+
+    def forward(self, input_ids):
+        # Initial embedding lookup
+        x = self.embed_tokens(input_ids)
+
+        # Pass through the transformer layers
         for layer in self.layers:
             x = layer(x)
         
-        # Apply normalization and rotary embeddings
+        # Apply the final layer normalization
         x = self.norm(x)
-        x = self.rotary_emb(x)
-        
-        # Final linear layer
-        logits = self.lm_head(x)
+        return x
+'''
+# Testing LlamaModel
+model = LlamaModel(config)
+input_ids = torch.randint(0, config['vocab_size'], (10, 2))  # (seq_len, batch_size)
+model_output = model(input_ids)
+print(f"Model output shape: {model_output.shape}")
+'''
+# 6. Causal Language Model (Final Model)
+class LlamaForCausalLM(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.model = LlamaModel(config)
+        # Share weights between the embedding and output layers
+        #self.lm_head = self.model.embed_tokens
+
+        self.lm_head= nn.Linear(config['hidden_size'], config['vocab_size'], bias=False)
+
+    def forward(self, input_ids):
+        hidden_states = self.model(input_ids)
+        logits = self.lm_head(hidden_states)
         return logits
 
-# Model instantiation
-model = LlamaForCausalLM(
-    vocab_size=49152,
-    hidden_size=576,
-    num_attention_heads=9,
-    num_layers=30,
-    intermediate_size=1536,
-    max_position_embeddings=2048
-)
+# Testing LlamaForCausalLM
+'''
+causal_lm_model = LlamaForCausalLM(config_model)
+print(causal_lm_model)
+from torchinfo import summary
+summary( causal_lm_model )
+input_ids = torch.randint(0, config_model['vocab_size'], (10, 2))  # (seq_len, batch_size)
+logits = causal_lm_model(input_ids)
+print(f"Logits shape: {logits.shape}")
+'''
 
-# Print the model architecture
-print(model)
+
