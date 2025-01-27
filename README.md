@@ -1,4 +1,4 @@
-```
+
 # Llama Model Implementation
 
 This repository contains an implementation of a Llama-like transformer model architecture, featuring rotary embeddings, multi-head self-attention, MLP layers, and a causal language model head. This architecture is primarily focused on the efficient and scalable use of positional embeddings and attention mechanisms, as used in models like GPT and other transformers.
@@ -24,10 +24,11 @@ The model is composed of several key components:
 To use this model, follow the steps below to set up your environment:
 
 1. Clone the repository:
-   ```bash
+   ```
+   bash
    git clone https://github.com/yourusername/llama-model.git
    cd llama-model
-```
+   ```
 
 # Model Components
 -1. LlamaRotaryEmbedding
