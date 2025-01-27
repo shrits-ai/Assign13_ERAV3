@@ -102,8 +102,8 @@ To use this model, follow the steps below to set up your environment:
    git clone https://github.com/yourusername/llama-model.git
    cd llama-model
    ```
-#Training Logs 
-Training logs are there in training.log file.
+# Training Logs 
+Training logs are there in training.log file. 
 
 # Model Components
 -1. LlamaRotaryEmbedding
