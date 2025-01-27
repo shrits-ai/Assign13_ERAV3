@@ -1,5 +1,12 @@
+#### Smollm2 Model 
 
-# Llama Model Implementation
+### Key Points:
+- **Model Overview:** A brief summary of the components in the architecture.
+- **Installation Instructions:** How to set up the project and install dependencies.
+- **Training Logs
+- **Component Descriptions:** Explanation of each class and its functionality, with code snippets to demonstrate usage.
+
+# Model Implementation
 
 This repository contains an implementation of a Llama-like transformer model architecture, featuring rotary embeddings, multi-head self-attention, MLP layers, and a causal language model head. This architecture is primarily focused on the efficient and scalable use of positional embeddings and attention mechanisms, as used in models like GPT and other transformers. This was created using AutoModelForCausalLM with checkpoint "HuggingFaceTB/SmolLM2-135M".  Below is the model : 
 ```
@@ -29,6 +36,8 @@ LlamaForCausalLM(
   )
   (lm_head): Linear(in_features=576, out_features=49152, bias=False)
 )
+```
+```
 ======================================================================
 Layer (type:depth-idx)                        Param #
 ======================================================================
@@ -1210,10 +1219,23 @@ Prompt: Gravity is
 2025-01-27 08:19:10,005 - Step 5040, Loss: 0.3904, LR: 1.22e-58
 2025-01-27 08:19:16,247 - Reached maximum steps. Exiting training loop.
 ```
+## Model Components
 
-# Model Components
--1. LlamaRotaryEmbedding
-This module implements the rotary position embeddings, a variant of sinusoidal embeddings, where positions are encoded with sine and cosine functions based on a scaling factor (theta).
+ 1. LlamaRotaryEmbedding
+ Overview:
+The LlamaRotaryEmbedding class implements a form of position encoding called rotary embeddings. Rotary embeddings use sinusoidal functions to encode positional information, with the key difference being that the embeddings are rotated by a learned scaling factor, theta. This allows the model to learn more flexible and potentially more expressive positional encodings compared to traditional sinusoidal position embeddings.
+```
+- Initialization:
+    - `dim`: The dimensionality of the embeddings (typically matches the model's hidden size).
+    - `theta`: A scaling factor that controls how quickly the positional encodings decay. This is typically set to `10000.0`, following the original sinusoidal encoding approach.
+
+- Forward Pass:
+    - The positional indices are created as a tensor of values from 0 to `seq_len` (sequence length).
+    - The frequencies are calculated based on the specified `theta` and `dim`.
+    - The sine and cosine of the position-scaled frequencies are computed to produce the rotary embeddings.
+    - These embeddings are applied to both the query and key tensors to provide position-aware attention.
+```
+Example Usage:
 ```
 from model import LlamaRotaryEmbedding
 
@@ -1222,8 +1244,25 @@ input_tensor = torch.randn(2, 10, 576)  # (batch_size, seq_len, hidden_size)
 rotary_output = rotary_emb(input_tensor)
 print(f"Rotary embedding output shape: {rotary_output.shape}")
 ```
--2. LlamaAttention
-The attention layer implements multi-head self-attention with rotary embeddings. It consists of query, key, and value projections, followed by scaled dot-product attention.
+2. LlamaAttention
+Overview:
+The LlamaAttention module implements the multi-head self-attention mechanism with rotary embeddings. It takes input tensors and calculates attention scores using queries (q), keys (k), and values (v). The attention mechanism allows the model to focus on different parts of the sequence, adjusting the weights dynamically for each position. This class uses rotary embeddings to incorporate position-aware information into the attention mechanism.
+```
+Initialization:
+
+q_proj: Linear projection for the query tensor.
+k_proj: Linear projection for the key tensor.
+v_proj: Linear projection for the value tensor.
+o_proj: Linear projection to the output tensor (hidden size).
+rope_emb: The rotary embedding module applied to the queries and keys.
+Forward Pass:
+
+The input tensor is projected into query, key, and value tensors using the respective projections.
+Rotary embeddings are applied to the query and key tensors to inject positional information.
+The scaled dot-product attention is computed between the query and key tensors, followed by applying softmax to obtain the attention probabilities.
+The attention probabilities are used to weight the values (v), and the result is passed through an output projection.
+```
+Example Usage:
 ```
 from model import LlamaAttention
 
@@ -1232,8 +1271,23 @@ input_tensor = torch.randn(2, 10, 576)  # (batch_size, seq_len, hidden_size)
 attention_output = attention_layer(input_tensor)
 print(f"Attention output shape: {attention_output.shape}")
 ```
--3. LlamaMLP
-This module defines a feed-forward MLP layer that projects the hidden state to an intermediate size, applies a non-linear activation (SiLU), and then projects it back to the hidden size.
+3. LlamaMLP
+Overview:
+The LlamaMLP class represents a multi-layer perceptron (MLP) that operates on the output of the attention mechanism. It consists of three projections: a gate projection, an up projection, and a down projection. These projections allow the model to transform the hidden states non-linearly. The MLP also includes an activation function (SiLU, also known as the Swish function) applied between projections.
+```
+Initialization:
+
+gate_proj: A linear projection that increases the dimensionality from the hidden size to the intermediate size.
+up_proj: A second linear projection that keeps the dimensionality constant at the intermediate size.
+down_proj: A third linear projection that brings the dimensionality back to the hidden size.
+act_fn: A non-linear activation function applied after the gate projection.
+Forward Pass:
+
+The input tensor is reshaped for projection.
+The input is passed through the gate projection, followed by activation.
+The result is passed through the up projection, followed by the down projection to return to the original hidden size.
+The tensor is reshaped back to its original shape.
+```
 ```
 from model import LlamaMLP
 
@@ -1243,9 +1297,24 @@ mlp_output = mlp_layer(input_tensor)
 print(f"MLP output shape: {mlp_output.shape}")
 
 ```
--4. LlamaDecoderLayer
-This layer combines attention and MLP layers with residual connections, and applies layer normalization before and after attention.
+4. LlamaDecoderLayer
+The LlamaDecoderLayer class represents a single transformer decoder layer, which includes a self-attention layer and an MLP layer. It also incorporates residual connections and layer normalization to stabilize training and improve the expressiveness of the model.
+```
+The LlamaDecoderLayer class represents a single transformer decoder layer, which includes a self-attention layer and an MLP layer. It also incorporates residual connections and layer normalization to stabilize training and improve the expressiveness of the model.
 
+Initialization:
+
+self_attn: An instance of the LlamaAttention module.
+mlp: An instance of the LlamaMLP module.
+input_layernorm: Layer normalization applied before the attention mechanism.
+post_attention_layernorm: Layer normalization applied after the attention mechanism and before the MLP.
+Forward Pass:
+
+The input tensor is normalized using input_layernorm.
+The tensor passes through the attention mechanism, with residual connections applied before and after attention.
+The result is normalized using post_attention_layernorm.
+The MLP is applied with another residual connection after the MLP output.
+```
 Example Usage:
 ```
 from model import LlamaDecoderLayer
@@ -1256,8 +1325,23 @@ decoder_output = decoder_layer(input_tensor)
 print(f"Decoder layer output shape: {decoder_output.shape}")
 
 ```
--5.LlamaModel
-The LlamaModel consists of a stack of decoder layers, which processes input sequences through a series of attention and MLP layers. The model also includes token embeddings for the input sequence.
+5.LlamaModel
+The LlamaModel class is a complete transformer model built by stacking several LlamaDecoderLayer instances. It also includes token embeddings for the input sequence and a final layer normalization step. The model processes sequences by passing them through the layers and embedding tokens for the input text.
+
+```
+The LlamaModel class is a complete transformer model built by stacking several LlamaDecoderLayer instances. It also includes token embeddings for the input sequence and a final layer normalization step. The model processes sequences by passing them through the layers and embedding tokens for the input text.
+
+Initialization:
+
+embed_tokens: An embedding layer that transforms input token IDs into dense vectors.
+layers: A ModuleList of LlamaDecoderLayer instances, representing the stacked decoder layers.
+norm: A final layer normalization applied to the output of the last decoder layer.
+Forward Pass:
+
+The input token IDs are passed through the token embeddings to obtain the input embeddings.
+The embeddings are passed through the stacked decoder layers.
+The output is normalized by the final layer normalization.
+```
 
 Example Usage:
 ```
@@ -1269,9 +1353,19 @@ model_output = model(input_ids)
 print(f"Model output shape: {model_output.shape}")
 
 ```
--6. LlamaForCausalLM
+6. LlamaForCausalLM
 This is the final model for causal language modeling. It shares the token embeddings between the input and output layers, making it suitable for text generation tasks.
+The LlamaForCausalLM class implements a causal language model head on top of the LlamaModel. This model is designed for autoregressive text generation, where the output sequence is generated token by token. The final output is passed through a linear layer to produce logits for each token in the vocabulary.
+```
+Initialization:
 
+model: An instance of the LlamaModel that provides the underlying transformer model.
+lm_head: A linear layer that projects the hidden states to the vocabulary size. This layer shares weights with the token embedding layer to optimize efficiency.
+Forward Pass:
+
+The input token IDs are passed through the LlamaModel.
+The hidden states from the transformer model are passed through the lm_head to produce logits for each token in the vocabulary.
+```
 Example Usage:
 ```
 from model import LlamaForCausalLM
