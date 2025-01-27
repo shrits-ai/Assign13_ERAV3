@@ -103,7 +103,7 @@ To use this model, follow the steps below to set up your environment:
    cd llama-model
    ```
 # Training Logs 
-Training logs are there in training.log file. 
+Training logs are there in training.log file. Retraining started from 5001. Log says step 5000 because step starts from 0. 
 ```
 2025-01-26 23:17:37,345 - Epoch 1/1
 2025-01-26 23:17:45,423 - Step 0, Loss: 10.9797, LR: 2.00e-05
