@@ -9,7 +9,7 @@
 
 # Model Implementation
 
-This repository contains an implementation of a Llama-like transformer model architecture, featuring rotary embeddings, multi-head self-attention, MLP layers, and a causal language model head. This architecture is primarily focused on the efficient and scalable use of positional embeddings and attention mechanisms, as used in models like GPT and other transformers. This was created using AutoModelForCausalLM with checkpoint "HuggingFaceTB/SmolLM2-135M".  Below is the model : 
+This repository contains an implementation of a Llama-like transformer model architecture, featuring rotary embeddings, multi-head self-attention, MLP layers, and a causal language model head. This architecture is primarily focused on the efficient and scalable use of positional embeddings and attention mechanisms, as used in models like GPT and other transformers. This was created using AutoModelForCausalLM with checkpoint "HuggingFaceTB/SmolLM2-135M".  Below is the reference model : 
 ```
 LlamaForCausalLM(
   (model): LlamaModel(
@@ -101,6 +101,34 @@ The model is composed of several key components:
 - **Full Transformer Model** (`LlamaModel`): A stack of decoder layers, consisting of the attention and MLP layers. The model also includes token embeddings.
 
 - **Causal Language Model** (`LlamaForCausalLM`): A transformer-based language model designed for autoregressive text generation, with a shared embedding and output layer for more efficient training and inference.
+
+```
+Model parameters: 134.52M
+CustomLLM(
+  (embed_tokens): Embedding(49152, 576)
+  (layers): ModuleList(
+    (0-29): 30 x DecoderLayer(
+      (self_attn): CustomAttention(
+        (q_proj): Linear(in_features=576, out_features=576, bias=False)
+        (k_proj): Linear(in_features=576, out_features=192, bias=False)
+        (v_proj): Linear(in_features=576, out_features=192, bias=False)
+        (o_proj): Linear(in_features=576, out_features=576, bias=False)
+        (rotary_emb): RotaryEmbedding()
+      )
+      (mlp): CustomMLP(
+        (gate_proj): Linear(in_features=576, out_features=1536, bias=False)
+        (up_proj): Linear(in_features=576, out_features=1536, bias=False)
+        (down_proj): Linear(in_features=1536, out_features=576, bias=False)
+        (act_fn): SiLU()
+      )
+      (input_norm): CustomRMSNorm()
+      (post_attn_norm): CustomRMSNorm()
+    )
+  )
+  (norm): CustomRMSNorm()
+  (lm_head): Linear(in_features=576, out_features=49152, bias=False)
+)
+```
 
 ## Installation
 
