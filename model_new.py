@@ -147,7 +147,6 @@ config_model = {
     "use_cache": True,
     "vocab_size": 49152
 }
-'''
 #Testing
 rank = 242  # Rank for low-rank approximations
 causal_lm_model = LlamaForCausalLM(config_model, rank)
@@ -180,7 +179,7 @@ for _ in range(50):  # Generate up to 50 tokens
 
 generated_text = tokenizer.decode(input_ids.squeeze(), skip_special_tokens=True)
 print(f"Generated Text: {generated_text}")
-
+'''
 # Configuration parameters
 vocab_size = 49152
 hidden_size = 576
