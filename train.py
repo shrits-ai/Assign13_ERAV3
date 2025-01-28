@@ -115,20 +115,23 @@ class MPSCallback(TrainerCallback):
 
 # Add this new callback class
 class TextGenerationCallback(TrainerCallback):
-    def __init__(self, tokenizer, config, prompt="Hello, AI world!", generation_length=100):
+    def __init__(self, tokenizer, config, prompt="Hello, AI world!", generation_length=100, temperature=0.7 ):
         self.tokenizer = tokenizer
         self.config = config
         self.prompt = prompt
         self.generation_length = generation_length
+        self.temperature = temperature
         
     def on_step_end(self, args, state, control, **kwargs):
+        # orig 500
         if state.global_step % 500 == 0 and state.global_step > 0:
             model = kwargs['model']
             
             # Tokenize the prompt
             inputs = self.tokenizer(
                 self.prompt, 
-                return_tensors="pt", 
+                return_tensors="pt",
+                padding=False,  # Explicitly disable padding
                 return_attention_mask=False
             ).to(device)
             
@@ -138,9 +141,9 @@ class TextGenerationCallback(TrainerCallback):
                 outputs = model.generate(
                     input_ids=inputs.input_ids,
                     max_new_tokens=self.generation_length,
-                    temperature=0.7,
+                    temperature=self.temperature,
                     top_p=0.9,
-                    eos_token_id=self.config.eos_token_id,
+                    eos_token_id=None, ## Disable EOS early stopping
                     pad_token_id=self.config.pad_token_id
                 )
             model.train()
@@ -171,7 +174,8 @@ trainer = Trainer(
             tokenizer,
             config=config,  # Pass the config here
             prompt="The future of AI is",
-            generation_length=50
+            generation_length=100,
+            temperature=0.3  # Reduce randomness
         ),
     ]
 )
