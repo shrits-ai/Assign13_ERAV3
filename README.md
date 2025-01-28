@@ -30,11 +30,7 @@ LlamaForCausalLM(
 )
 Model parameters: 162M (approx)
 ```
-
-
-Model Architecture (model.py)
-Key Specifications:
-
+# Model Architecture (model.py)
 ```
 Model parameters: 134.52M
 CustomLLM(
@@ -62,7 +58,7 @@ CustomLLM(
   (lm_head): Linear(in_features=576, out_features=49152, bias=False)
 )
 ```
-# Model Architecture (model.py)
+
 ## Key Specifications:
 ```
 - Parameters: ~135M (configurable)
