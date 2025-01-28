@@ -182,11 +182,11 @@ trainer = Trainer(
 )
 
 # Check if checkpoint exists
-checkpoint_path = f"{CHECKPOINT_DIR}/final_5000"
+checkpoint_path = f"{CHECKPOINT_DIR}/checkpoint-5000"
 if os.path.exists(checkpoint_path):
     print(f"Found checkpoint at {checkpoint_path}, resuming training... logging interval changed to 10")
     # Temporarily set max_steps to 50 for the resumed training
-    trainer.args.max_steps = 50
+    trainer.args.max_steps = 5050
     trainer.args.logging_steps=10
     trainer.train(resume_from_checkpoint=checkpoint_path)
     trainer.save_model(f"{CHECKPOINT_DIR}/final_5050")
