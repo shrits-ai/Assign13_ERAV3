@@ -1,4 +1,5 @@
 import torch
+import os
 from torch.utils.data import IterableDataset
 from accelerate import Accelerator
 from transformers import (
@@ -10,7 +11,7 @@ from transformers import (
 )
 from datasets import load_dataset
 import wandb
-from model_smol2 import CustomConfig, CustomLLM
+from model import CustomConfig, CustomLLM
 
 # Configuration - Match exactly with your model specs
 CHECKPOINT_DIR = "./checkpoints"
@@ -180,19 +181,18 @@ trainer = Trainer(
     ]
 )
 
+# Check if checkpoint exists
+checkpoint_path = f"{CHECKPOINT_DIR}/final_5000"
+if os.path.exists(checkpoint_path):
+    print(f"Found checkpoint at {checkpoint_path}, resuming training... logging interval changed to 10")
+    # Temporarily set max_steps to 50 for the resumed training
+    trainer.args.max_steps = 50
+    trainer.args.logging_steps=10
+    trainer.train(resume_from_checkpoint=checkpoint_path)
+    trainer.save_model(f"{CHECKPOINT_DIR}/final_5050")
+else:
+    print(f"No checkpoint found, starting training from scratch...")
+    trainer.train()
+    trainer.save_model(f"{CHECKPOINT_DIR}/final_5000")
 
-# Phase 1 Training
-accelerator.print("Starting initial training (5000 steps)")
-trainer.train()
-
-# Save final checkpoint
-accelerator.wait_for_everyone()
-trainer.save_model(f"{CHECKPOINT_DIR}/final_5000")
-
-# Phase 2 Training (Resume)
-accelerator.print("\nResuming training for 50 steps")
-trainer.train(resume_from_checkpoint=f"{CHECKPOINT_DIR}/final_5000")
-
-# Final save
-trainer.save_model(f"{CHECKPOINT_DIR}/final_5050")
 accelerator.print("Training complete!")
