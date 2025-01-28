@@ -11,6 +11,7 @@ from transformers import (
 from datasets import load_dataset
 import wandb
 from model_smol2 import CustomConfig, CustomLLM
+
 # Configuration - Match exactly with your model specs
 CHECKPOINT_DIR = "./checkpoints"
 SEQ_LENGTH = 256  # Reduced from 2048 due to memory constraints
@@ -90,20 +91,21 @@ data_collator = DataCollatorForLanguageModeling(
 training_args = TrainingArguments(
     output_dir=CHECKPOINT_DIR,
     per_device_train_batch_size=BATCH_SIZE,
-    max_steps=5000,
-    logging_steps=100,
-    save_steps=500,
+    max_steps=5000, #testing 50 orig 5000
+    logging_steps=100, #testing 10 orig 100
+    save_steps=500, # orig is 500 
     eval_strategy="steps",
-    eval_steps=500,
+    eval_steps=500, # orig 500
     learning_rate=2e-4,
     weight_decay=0.01,
-    warmup_steps=500,
+    warmup_steps=500, # orig 500
     gradient_accumulation_steps=GRAD_ACCUM_STEPS,
     max_grad_norm=1.0,
     fp16=False,  # Disabled for MPS
     remove_unused_columns=True,
     report_to="wandb",
-    ddp_find_unused_parameters=False
+    ddp_find_unused_parameters=False,
+    save_safetensors=False,
 )
 
 # Custom callback for MPS-specific handling
@@ -128,7 +130,7 @@ class TextGenerationCallback(TrainerCallback):
                 self.prompt, 
                 return_tensors="pt", 
                 return_attention_mask=False
-            ).to(model.device)
+            ).to(device)
             
             # Generate text
             model.eval()

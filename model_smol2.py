@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import math
 from transformers.modeling_outputs import CausalLMOutputWithPast
+
 # 1. Custom Configuration Class 
 class CustomConfig:
     def __init__(self):
@@ -258,7 +259,7 @@ class CustomLLM(nn.Module):
             # Forward pass (only compute last logits for efficiency)
             with torch.no_grad():
                 outputs = self(input_ids)
-                next_token_logits = outputs[:, -1, :]
+                next_token_logits = outputs.logits[:, -1, :]
 
             # Repetition penalty
             if repetition_penalty != 1.0:
